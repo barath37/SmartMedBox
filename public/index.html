@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Med Box Caregiver Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; height: 100vh; width: 100vw; overflow: hidden; display: flex; flex-direction: column; }
+        
+        .flex-grow-panel { flex-grow: 1; overflow: hidden; display: flex; gap: 1.5rem; padding: 1.5rem; }
+        
+        /* Internal Scrollbar for Logs ONLY */
+        .log-container { flex-grow: 1; overflow-y: auto; padding-right: 0.5rem; margin-top: 1rem; }
+        .log-container::-webkit-scrollbar { width: 6px; }
+        .log-container::-webkit-scrollbar-track { background: transparent; }
+        .log-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        
+        /* Critical Lockdown SOS State */
+        .critical-alert-body {
+            animation: critical-flash 0.5s infinite alternate !important;
+            pointer-events: none !important;
+        }
+        @keyframes critical-flash {
+            0% { box-shadow: inset 0 0 100px rgba(185, 28, 28, 0.4); }
+            100% { box-shadow: inset 0 0 100px rgba(185, 28, 28, 0.9); }
+        }
+        
+        /* Log Fade In */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 transition-colors duration-300" id="main-body">
+
+    <div id="sos-banner" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center bg-red-700/95 backdrop-blur-md">
+        <h1 class="text-white text-6xl md:text-8xl font-black text-center drop-shadow-2xl animate-pulse tracking-tighter">
+            🚨 CRITICAL<br/>
+            <span class="text-5xl md:text-7xl">PATIENT EMERGENCY</span>
+        </h1>
+        <p class="text-white/80 text-2xl mt-8 font-medium animate-pulse">Contacting emergency services. Awaiting caregiver arrival.</p>
+        <p class="text-white/50 text-xs mt-16 font-mono">[UI Locked Down: Standard reset protocol required]</p>
+    </div>
+
+    <div id="edit-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg p-6 space-y-5 animate-fade-in">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-slate-900" id="modal-title">Configure Compartment</h3>
+                <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l18 18"></path></svg>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-1">Medication Name</label>
+                    <input type="text" id="edit-name" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-200">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Pills Added</label>
+                        <input type="number" id="edit-pills" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-200">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">Schedule Time</label>
+                        <input type="time" id="edit-time" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-200">
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4 flex justify-end gap-3">
+                <button onclick="closeEditModal()" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg">Cancel</button>
+                <button onclick="saveCompartment()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm">Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-white border-b border-slate-200 px-6 py-3 flex justify-between items-center shadow-sm shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600 text-white p-2 rounded-lg shadow-inner">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <h1 class="text-xl font-bold text-slate-800">Smart Med Box <span class="text-slate-400 font-normal">Caregiver Portal</span></h1>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div id="status-badge" class="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200 flex items-center gap-1.5 shadow-inner">
+                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                System Idle
+            </div>
+            <div class="text-md font-semibold text-slate-600 tabular-nums bg-slate-100 px-3 py-1 rounded-md border border-slate-200" id="clock">00:00:00 AM</div>
+        </div>
+    </header>
+
+    <main class="flex-grow-panel">
+        
+        <div class="flex-1 flex flex-col gap-6 h-full">
+            
+            <div class="bg-slate-900 rounded-2xl shadow-inner border border-slate-200 overflow-hidden relative flex-1 min-h-[100px] flex items-center justify-center">
+                <div class="absolute top-4 left-4 z-10 bg-black/60 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-white/10 shadow-lg">
+                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                    LIVE Vision Feed
+                </div>
+                <img id="webcam" src="http://127.0.0.1:5000/video_feed" class="w-full h-full object-contain bg-slate-900" alt="Waiting for AI Camera Feed...">
+            </div>
+
+            <div class="shrink-0">
+                <div class="grid grid-cols-4 gap-4">
+                    
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                        <button onclick="openEditModal(1, 'Aspirin', 10, '08:30')" class="absolute top-3 right-3 p-1 rounded-md text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <p class="text-xs text-slate-400 font-bold mb-1 tracking-wide">COMP 1</p>
+                        <p class="text-md font-bold text-slate-800 truncate" id="comp-name-1">Aspirin</p>
+                        <div class="mt-1 flex justify-between items-end">
+                            <span class="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-blue-700" id="comp-pills-1">10 pills left</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                        <button onclick="openEditModal(2, 'Vitamin D', 30, '13:00')" class="absolute top-3 right-3 p-1 rounded-md text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <p class="text-xs text-slate-400 font-bold mb-1 tracking-wide">COMP 2</p>
+                        <p class="text-md font-bold text-slate-800 truncate" id="comp-name-2">Vitamin D</p>
+                        <div class="mt-1 flex justify-between items-end">
+                            <span class="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-blue-700" id="comp-pills-2">30 pills left</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow" id="comp-card-3">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-red-500" id="comp-color-3"></div>
+                        <button onclick="openEditModal(3, 'Blood Pressure', 0, '09:00')" class="absolute top-3 right-3 p-1 rounded-md text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <p class="text-xs text-red-500 font-bold mb-1 tracking-wide" id="comp-title-3">COMP 3</p>
+                        <p class="text-md font-bold text-red-900 truncate" id="comp-name-3">BP Meds</p>
+                        <div class="mt-1">
+                            <span class="text-xs font-bold text-red-700 bg-red-100/80 px-2 py-0.5 rounded flex items-center gap-1" id="comp-pills-3">🚨 0 pills left</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-slate-300" id="comp-color-4"></div>
+                        <button onclick="openEditModal(4, 'Empty', 0, '12:00')" class="absolute top-3 right-3 p-1 rounded-md text-slate-400 opacity-0 group-hover:opacity-100 hover:bg-slate-100 transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <p class="text-xs text-slate-400 font-bold mb-1 tracking-wide">COMP 4</p>
+                        <p class="text-md font-bold text-slate-400 truncate" id="comp-name-4">Empty Setup</p>
+                        <div class="mt-1 flex justify-between items-end">
+                            <span class="text-sm font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded" id="comp-pills-4">Configure -></span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="w-80 flex flex-col gap-6 h-full shrink-0">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 shrink-0">
+                <h2 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Today's Adherence</h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-blue-50/50 border border-blue-100 p-3 rounded-xl text-center">
+                        <p class="text-3xl font-black text-blue-600" id="doses-taken">4</p>
+                        <p class="text-[10px] text-blue-800 font-semibold mt-0.5 uppercase tracking-wider">Taken</p>
+                    </div>
+                    <div class="bg-slate-50/50 border border-slate-100 p-3 rounded-xl text-center">
+                        <p class="text-3xl font-black text-slate-700">0</p>
+                        <p class="text-[10px] text-slate-500 font-semibold mt-0.5 uppercase tracking-wider">Missed</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+                <div class="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+                    <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Activity Log</h2>
+                    <span class="flex items-center gap-1.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-sm">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Recording
+                    </span>
+                </div>
+                <div class="p-4 flex-1 log-container space-y-3" id="activity-log">
+                    <div class="flex gap-2.5 text-xs animate-fade-in"><span class="text-slate-400 font-mono text-[11px] whitespace-nowrap mt-0.5">08:00 AM</span><div><p class="text-slate-800 font-semibold">System Boot</p></div></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div class="bg-slate-900 px-6 py-3 flex items-center justify-between shrink-0 border-t border-slate-800 z-20">
+        <div class="text-xs font-mono font-semibold text-slate-400 flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+            HARDWARE OVERRIDE
+        </div>
+        <div class="flex gap-2">
+            <button onclick="triggerApproach()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded border border-slate-700 transition">🟡 Trigger Approach</button>
+            <button onclick="triggerTaken()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded border border-slate-700 transition">🟢 Trigger Taken</button>
+            <button onclick="triggerSOS()" class="px-3 py-1.5 bg-red-900/40 hover:bg-red-900/80 text-red-200 text-xs font-semibold rounded border border-red-800/50 transition">🚨 Trigger SOS</button>
+        </div>
+    </div>
+
+    <script>
+        // 1. Live Clock Utility
+        function updateClock() {
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 2. Add Log Entry
+        function addLogEntry(title, message, type = 'normal') {
+            const logContainer = document.getElementById('activity-log');
+            const timeString = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            let titleColor = type === 'success' ? 'text-green-700' : type === 'warning' ? 'text-yellow-700' : type === 'error' ? 'text-red-700' : 'text-slate-800';
+            logContainer.insertAdjacentHTML('beforeend', `<div class="flex gap-2.5 text-xs animate-fade-in"><span class="text-slate-400 font-mono text-[11px] whitespace-nowrap mt-0.5">${timeString}</span><div><p class="${titleColor} font-semibold">${title}</p><p class="text-slate-600 text-[11px] leading-relaxed">${message}</p></div></div>`);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // 3. UI State Actions
+        const body = document.getElementById('main-body');
+        const statusBadge = document.getElementById('status-badge');
+        let currentDoses = 4;
+
+        function triggerApproach() {
+            if(body.classList.contains('critical-alert-body')) return; 
+            statusBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-300 flex items-center gap-1.5 shadow-inner';
+            statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>Analyzing Video';
+            addLogEntry('Sensor Active', 'Patient detected, analyzing...', 'warning');
+        }
+
+        function triggerTaken() {
+            if(body.classList.contains('critical-alert-body')) return;
+            statusBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-300 flex items-center gap-1.5 shadow-inner';
+            statusBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>Dose Verified Successful';
+            document.getElementById('doses-taken').textContent = ++currentDoses;
+            addLogEntry('Medication Validated', 'Dose confirmed via AI.', 'success');
+        }
+
+        function triggerSOS() {
+            body.classList.add('critical-alert-body');
+            document.getElementById('sos-banner').classList.remove('hidden');
+            closeEditModal();
+            addLogEntry('🚨 SOS ALERT', 'Emergency detected. Contacting ER dispatch.', 'error');
+        }
+
+        // 4. Server Event Listener
+        const eventSource = new EventSource('/live-updates');
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.action === 'approach') triggerApproach();
+            if (data.action === 'taken') triggerTaken();
+            if (data.action === 'sos') triggerSOS();
+        };
+
+        // 5. EDIT COMPARTMENT LOGIC
+        let currentEditComp = 1;
+        const modal = document.getElementById('edit-modal');
+        
+        function openEditModal(compId, currentName, currentPills, currentTime) {
+            if(body.classList.contains('critical-alert-body')) return; 
+            currentEditComp = compId;
+            document.getElementById('modal-title').innerText = `Configure Compartment ${compId}`;
+            document.getElementById('edit-name').value = currentName;
+            document.getElementById('edit-pills').value = currentPills;
+            document.getElementById('edit-time').value = currentTime;
+            modal.classList.remove('hidden');
+        }
+        
+        function closeEditModal() { 
+            modal.classList.add('hidden'); 
+        }
+        
+        function saveCompartment() {
+            const newName = document.getElementById('edit-name').value;
+            const newPills = document.getElementById('edit-pills').value;
+            
+            // Update the text on the specific card
+            document.getElementById(`comp-name-${currentEditComp}`).innerText = newName;
+            
+            // Remove error styling if it was empty/red before
+            document.getElementById(`comp-name-${currentEditComp}`).className = "text-md font-bold text-slate-800 truncate";
+            
+            if(newPills <= 0) {
+                document.getElementById(`comp-pills-${currentEditComp}`).innerHTML = `🚨 0 pills left`;
+                document.getElementById(`comp-pills-${currentEditComp}`).className = "text-xs font-bold text-red-700 bg-red-100/80 px-2 py-0.5 rounded flex items-center gap-1";
+            } else {
+                document.getElementById(`comp-pills-${currentEditComp}`).innerText = `${newPills} pills left`;
+                document.getElementById(`comp-pills-${currentEditComp}`).className = "text-sm font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-blue-700";
+            }
+
+            // Fix card colors if it was previously grey or red
+            if(currentEditComp === 3 || currentEditComp === 4) {
+                document.getElementById(`comp-color-${currentEditComp}`).className = "absolute top-0 left-0 w-1 h-full bg-blue-500";
+                if(currentEditComp === 3) {
+                    document.getElementById(`comp-card-3`).className = "bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow";
+                    document.getElementById(`comp-title-3`).className = "text-xs text-slate-400 font-bold mb-1 tracking-wide";
+                }
+            }
+
+            addLogEntry('Config Saved', `Compartment ${currentEditComp} updated with ${newName}.`, 'success');
+            closeEditModal();
+        }
+    </script>
+</body>
+</html>
